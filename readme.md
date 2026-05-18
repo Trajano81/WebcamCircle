@@ -33,15 +33,27 @@ Great for workshop presenters and streamers who want to enhance their screenshar
 
 Please make sure WebcamCircle is the only app that is trying to use your web camera at any one time. This means that if you are using MsTeams, then you should turn off your web camera in MsTeams **BEFORE** starting WebcamCircle.
 
-WebcamCircle has been built and tested on Windows 10 only.
+WebcamCircle has been built and tested on Windows 10 and macOS (Apple Silicon and Intel).
 
 <br />
 	
 ## ⬇️ Download and Run
 
-Use the link below to download the latest copy of WebcamCircle:
+Use the link below to download the latest copy of WebcamCircle.
+
+### Windows
 
 [<img src="images/download.png" height="40">](https://github.com/cainhill/WebcamCircle/releases/download/0.0.2/WebcamCircle.0.0.2.exe)
+
+### macOS
+
+[<img src="images/download.png" height="40" alt="Apple Silicon download">](https://github.com/cainhill/WebcamCircle/releases/download/0.0.2/WebcamCircle-0.0.2-arm64.dmg) Apple Silicon (M1, M2, M3, M4)
+
+[<img src="images/download.png" height="40" alt="Intel download">](https://github.com/cainhill/WebcamCircle/releases/download/0.0.2/WebcamCircle-0.0.2-x64.dmg) Intel
+
+*Not sure which one? Apple menu, About This Mac. Anything starting with M (M1, M2, etc.) is Apple Silicon. Anything labeled "Intel Core" is Intel.*
+
+On first launch, macOS will block the app because it is not signed. Right-click the app in Finder, choose Open, then click Open in the confirmation dialog.
 
 <br />
 
