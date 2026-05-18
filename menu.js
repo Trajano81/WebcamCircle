@@ -66,7 +66,7 @@ const debugSubmenu = [
 	{
 		label: 'Show App Data',
 		click() {
-			shell.openItem(app.getPath('userData'));
+			shell.openPath(app.getPath('userData'));
 		}
 	},
 	{
@@ -83,7 +83,7 @@ const debugSubmenu = [
 	{
 		label: 'Delete App Data',
 		click() {
-			shell.moveItemToTrash(app.getPath('userData'));
+			shell.trashItem(app.getPath('userData'));
 			app.relaunch();
 			app.quit();
 		}
