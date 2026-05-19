@@ -63,6 +63,37 @@ Web Camera / Circle / Overlay / Float / Presentation / Walkthrough / Streaming
 
 <br />
 
+## 🛠️ Building and Releasing (macOS)
+
+Builders cutting a new macOS release can use the `release:mac` script, which wraps the whole flow into one command.
+
+### One-time setup
+
+1. Install [Node.js](https://nodejs.org/) (any LTS version) and the [GitHub CLI](https://cli.github.com/).
+2. Run `gh auth login` so the CLI can create releases on your behalf.
+3. Clone the repo and run `npm install`.
+
+### Cut a release
+
+```bash
+npm run release:mac -- 0.2.0 "Release notes shown on the GitHub release page"
+```
+
+The two arguments are the new semver version and the release-notes body. The script then:
+
+1. Bumps `version` in [package.json](package.json)
+2. Updates the macOS download URLs in this readme to point at the new version
+3. Cleans `dist/` and rebuilds both DMGs (`npm run dist:mac`)
+4. Commits the version bump, pushes to `main`
+5. Creates an annotated git tag, pushes it
+6. Creates the GitHub release with both DMGs attached
+
+Guard rails: the script exits early if the working tree is dirty, you are not on `main`, the tag already exists, or the new version matches the current one. So a failed run leaves the repo in a recoverable state.
+
+The Windows download link in this readme is not touched, it still points at the upstream `cainhill/WebcamCircle` release.
+
+<br />
+
 ## 👍 Credits and Attributions
 
 * [Sindre Sorhus](https://github.com/sindresorhus) - [Electron Boilerplate](https://github.com/sindresorhus/electron-boilerplate)
