@@ -47,13 +47,19 @@
 	</body>
 	<style>
 		/* https://www.electronjs.org/docs/api/frameless-window */
-		/* The body and #crop are draggable (so the user can move the window
-		   by grabbing the circle). Interactive controls below are no-drag.
-		   The name banner and label are also no-drag so dblclick can fire
-		   on them to open the settings overlay. */
+		/* #crop and everything inside it is no-drag. Window-move on the circle
+		   is handled by JS (IPC to main) so the resize-edge gesture and the
+		   dblclick on the name pill both work. The body itself stays drag so
+		   the user can move the pre-Start panel by grabbing its background. */
 		button, select, input, label, #settings-overlay,
-		#name-banner, #name-label {
+		#name-banner, #name-label, #crop, #video {
 			-webkit-app-region: no-drag;
+		}
+		/* Prevent native text selection during double-click on the pills or
+		   drag-resize on the circle. */
+		#crop, #name-banner, #name-label, #video {
+			user-select: none;
+			-webkit-user-select: none;
 		}
 		p {
 			padding-top: 10px;
@@ -247,7 +253,8 @@
 		const settingsOverlay = document.getElementById('settings-overlay');
 
 		let isRunning = false;
-		let resizing = null; // { initialDiameter, initialDistFromCenter, centerScreen: {x, y} }
+		let resizing = null; // { initialDiameter, initialDist, centerScreen: {x, y} }
+		let movingWindow = null; // { startScreen: {x, y} } during JS-based window move
 		let overlayExpanded = false; // true when overlay is temporarily expanded above user's saved size
 
 		let currentStream;
@@ -484,49 +491,67 @@
 			}
 		});
 
-		// Start a drag-resize when the user mousedowns near the edge.
+		// Mousedown on the circle: edge zone starts a resize, anywhere else
+		// starts a window-move. Both gestures use JS (no -webkit-app-region: drag)
+		// so they actually fire on macOS, where the OS would otherwise capture
+		// drag-region mousedowns for window-move/zoom.
 		crop.addEventListener('mousedown', event => {
-			if (!isNearEdge(event.clientX, event.clientY)) return;
-			// Ignore mousedowns that originated on interactive children (gear, overlay, pill).
-			if (event.target !== crop && event.target !== document.getElementById('video')) {
+			// Ignore mousedowns that originated on interactive children
+			// (gear, overlay, name pill).
+			if (event.target !== crop && event.target !== video) {
 				return;
 			}
 			event.preventDefault();
-			event.stopPropagation();
-			const c = getCropCenter();
-			// Convert circle center to screen coords using the offset between
-			// screenXY and clientXY of this event. screenXY stays stable as the
-			// window resizes (we keep the window center fixed).
-			const centerScreenX = event.screenX - (event.clientX - c.x);
-			const centerScreenY = event.screenY - (event.clientY - c.y);
-			const dist = Math.sqrt(
-				(event.screenX - centerScreenX) ** 2 +
-				(event.screenY - centerScreenY) ** 2
-			);
-			resizing = {
-				initialDiameter: c.radius * 2,
-				initialDist: dist,
-				centerScreen: {x: centerScreenX, y: centerScreenY}
-			};
-			crop.classList.add('resizing');
+			if (isNearEdge(event.clientX, event.clientY)) {
+				const c = getCropCenter();
+				const centerScreenX = event.screenX - (event.clientX - c.x);
+				const centerScreenY = event.screenY - (event.clientY - c.y);
+				const dist = Math.sqrt(
+					(event.screenX - centerScreenX) ** 2 +
+					(event.screenY - centerScreenY) ** 2
+				);
+				resizing = {
+					initialDiameter: c.radius * 2,
+					initialDist: dist,
+					centerScreen: {x: centerScreenX, y: centerScreenY}
+				};
+				crop.classList.add('resizing');
+			} else {
+				// Start a window-move. Tell main to remember the current window
+				// position, then we stream deltas as the cursor moves.
+				movingWindow = {
+					startScreen: {x: event.screenX, y: event.screenY}
+				};
+				ipcRenderer.send('move-window-start');
+			}
 		});
 
 		document.addEventListener('mousemove', event => {
-			if (!resizing) return;
-			const dx = event.screenX - resizing.centerScreen.x;
-			const dy = event.screenY - resizing.centerScreen.y;
-			const dist = Math.sqrt(dx * dx + dy * dy);
-			const newDiameter = resizing.initialDiameter + 2 * (dist - resizing.initialDist);
-			applyCircleSize(newDiameter);
+			if (resizing) {
+				const dx = event.screenX - resizing.centerScreen.x;
+				const dy = event.screenY - resizing.centerScreen.y;
+				const dist = Math.sqrt(dx * dx + dy * dy);
+				const newDiameter = resizing.initialDiameter + 2 * (dist - resizing.initialDist);
+				applyCircleSize(newDiameter);
+			} else if (movingWindow) {
+				const dx = event.screenX - movingWindow.startScreen.x;
+				const dy = event.screenY - movingWindow.startScreen.y;
+				ipcRenderer.send('move-window-delta', {dx, dy});
+			}
 		});
 
 		document.addEventListener('mouseup', () => {
-			if (!resizing) return;
-			const finalSize = parseInt(crop.style.width, 10);
-			writeState('circleSize', finalSize);
-			resizing = null;
-			crop.classList.remove('resizing');
-			crop.classList.remove('resize-hover');
+			if (resizing) {
+				const finalSize = parseInt(crop.style.width, 10);
+				writeState('circleSize', finalSize);
+				resizing = null;
+				crop.classList.remove('resizing');
+				crop.classList.remove('resize-hover');
+			}
+			if (movingWindow) {
+				movingWindow = null;
+				ipcRenderer.send('move-window-end');
+			}
 		});
 
 		// Scroll wheel on the name pills resizes the font.

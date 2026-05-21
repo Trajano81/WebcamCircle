@@ -144,6 +144,31 @@ ipcMain.on('resize-window', (event, {width, height}) => {
 	mainWindow.setBounds({x: newX, y: newY, width, height});
 });
 
+// JS-based window drag. The renderer detects mousedown in the center of the
+// circle (away from the edge resize zone) and calls 'move-window-start' to
+// record the starting window position. Subsequent 'move-window-delta' events
+// move the window by the screen-coords delta. We use this instead of
+// -webkit-app-region: drag on #crop because macOS captures mousedown / dblclick
+// on drag regions for OS-level gestures (window-move / window-zoom), so JS
+// resize and dblclick handlers never see those events.
+let moveStartPos = null;
+
+ipcMain.on('move-window-start', () => {
+	if (mainWindow) {
+		moveStartPos = mainWindow.getPosition();
+	}
+});
+
+ipcMain.on('move-window-delta', (event, {dx, dy}) => {
+	if (mainWindow && moveStartPos) {
+		mainWindow.setPosition(moveStartPos[0] + dx, moveStartPos[1] + dy);
+	}
+});
+
+ipcMain.on('move-window-end', () => {
+	moveStartPos = null;
+});
+
 (async () => {
 	await app.whenReady();
 	Menu.setApplicationMenu(buildMenu());
