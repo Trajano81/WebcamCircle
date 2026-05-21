@@ -85,7 +85,11 @@ const createMainWindow = async () => {
 		// https://github.com/electron/electron/issues/20933
 		alwaysOnTop: true,
 		// https://ourcodeworld.com/articles/read/315/how-to-create-a-transparent-window-with-electron-framework
-		transparent: true
+		transparent: true,
+		// Disable the macOS drop shadow so the window outline does not
+		// render a rectangle when the below-circle name label extends
+		// the body's content area past the circle.
+		hasShadow: false
 	});
 
 	win.on('ready-to-show', () => {

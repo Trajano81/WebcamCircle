@@ -47,7 +47,10 @@
 	</body>
 	<style>
 		/* https://www.electronjs.org/docs/api/frameless-window */
-		button, select, input, label, #settings-overlay {
+		/* #crop is no-drag so dblclick can fire (macOS captures dblclick on
+		   drag regions for window-zoom). The body remains drag, so the
+		   transparent margin around the circle is still draggable. */
+		button, select, input, label, #settings-overlay, #crop {
 			-webkit-app-region: no-drag;
 		}
 		p {
