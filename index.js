@@ -71,8 +71,8 @@ const createMainWindow = async () => {
 		maximizable: false,
 		minimizable: false,
 		acceptFirstMouse: true,
-		width: 400,
-		height: 400,
+		width: 520,
+		height: 520,
 		// https://stackoverflow.com/questions/44391448/electron-require-is-not-defined
 		webPreferences: {
 			nodeIntegration: true,

@@ -2,7 +2,7 @@
 
 ## Summary
 
-0.2.1 adds an optional name label to the floating webcam circle. The user can type their name, pick the font color and background color, and choose whether the name appears as a banner inside the circle or as a label below it. The circle stays visually clean by default. **Double-clicking** on the circle reveals a small gear icon in the corner. Clicking the gear toggles a settings editor open and closed. Double-clicking on the circle again hides everything, and an auto-hide timer also hides everything after 5 seconds of inactivity. All four values persist across app launches.
+0.2.1 adds an optional name label to the floating webcam circle. The user can type their name, pick the font color and background color, and choose whether the name appears as a banner inside the circle or as a label below it. Once a name is set, the name pill itself is the way back into settings: **double-clicking the name pill** toggles a settings editor open and closed. When no name has been set, a small subtle gear icon appears in the corner of the circle as the fallback entry point. The circle is also enlarged in 0.2.1 (520x520 window with a 500x500 circle, up from the 400x400 window with a 300x300 circle in 0.1.0) so the settings overlay has room to breathe. All four values persist across app launches.
 
 ## Motivation
 
@@ -28,13 +28,25 @@ Clicking Start hides the controls panel and shows the circular camera view exact
 
 ## Running state UI
 
-- **Idle (default)**: just the circle. No gear, no chrome of any kind on the circle. Keeps screen recordings clean.
-- **Double-click on the circle to reveal the gear**: a double-click anywhere on the circle area shows the gear icon in the bottom-right corner. The gear appears at full opacity, no fading, no transitions. About 24x24 pixels. (Double-click is used rather than single-click so it does not conflict with the existing single-click + drag gesture that moves the window.)
-- **Click the gear to open settings**: with the gear visible, a single click on the gear shows the settings overlay over the lower part of the circle. The overlay contains the same four controls listed in the setup UI (name, font color, background color, position). Changes apply live, the visible name overlay updates as the user types or picks a color.
-- **Click the gear to close settings**: clicking the gear again hides the settings overlay. The gear itself stays visible.
-- **Two ways to return to idle**:
-  - **Manual**: double-click on the circle again. Both the gear and the settings overlay (if open) hide immediately.
-  - **Automatic**: after 5 seconds with no interaction (no click on the gear, no input in the overlay), both the gear and the settings overlay hide automatically. The timer resets every time the user interacts with the gear or the overlay.
+There are two states depending on whether a name has been set.
+
+**State A: name set (the typical case after the user types their name in the pre-Start panel).**
+
+- The circle shows the video and the name pill (either a banner inside the circle, near the bottom, or a label just below the circle, depending on the position setting). No other chrome is visible.
+- **Double-click the name pill**: the settings overlay opens over the middle of the circle. It contains the same four controls listed in the setup UI (name, font color, background color, position). Changes apply live, the visible name pill updates as the user types or picks a color.
+- **Double-click the name pill again**: the settings overlay closes.
+
+**State B: name is empty (the fallback case).**
+
+- The circle shows the video with no name pill (since there is no name to display). A small subtle gear icon sits in the bottom-right corner of the circle at about 60% opacity. The gear is the fallback entry point into settings when the user has not set a name.
+- **Click the gear**: the settings overlay opens, same as state A. Same controls, same live preview.
+- **Click the gear again**: the settings overlay closes. The gear stays visible.
+
+**Transitions between states**: the moment the user types a name (in the pre-Start panel or in the settings overlay), state A applies and the gear hides. The moment the user clears the name, state B applies and the gear reappears.
+
+There is no auto-dismiss timer for the settings overlay. The user closes the overlay explicitly by clicking the gear or double-clicking the name pill again. This was changed during implementation review because a time-based dismiss felt rushed when the user was still deciding on colors or typing a name.
+
+**Why this design**: a single, always-visible double-click trigger on the circle itself is not feasible on macOS. The whole circle is a drag region (so the user can grab it to move the window), and macOS captures double-click on drag regions for window-zoom before the event reaches the page. The name pill is small enough to mark as `no-drag` without breaking the drag gesture on the rest of the circle, and the gear is the fallback for the case where there is no pill to click.
 
 ## Empty-name behavior
 
@@ -54,15 +66,17 @@ If electron-store has no saved values yet (fresh install), the defaults apply: e
 A change is "done" when all of the following are true:
 
 - Setting name, both colors, and position, then quitting (Cmd+Q on macOS, close button on Windows) and relaunching, restores all four values into the form controls.
-- After clicking Start, the circle shows no chrome (no gear, no overlay). The idle state is visually identical to today's behavior.
-- A double-click on the circle reveals the gear in the bottom-right corner at full opacity. A second double-click on the circle hides the gear again.
-- With the gear visible, a single click on the gear opens the settings overlay. A second click on the gear closes it. The gear itself stays visible after the settings close.
-- If 5 seconds pass with no interaction (no click on the gear, no typing or color change in the overlay), the gear and the overlay both auto-hide and the app returns to the idle state. Any interaction during the 5 seconds resets the timer.
-- Typing in the name field or changing a color updates the visible name overlay within the same animation frame (no perceptible lag).
+- After clicking Start with a name set: the circle (500x500) shows the video and the name pill, plus no other chrome.
+- After clicking Start with the name empty: the circle shows the video plus a small gear icon at about 60% opacity in the bottom-right corner.
+- Double-clicking the name pill opens the settings overlay over the middle of the circle. A second double-click on the pill closes it.
+- Clicking the gear (visible only when name is empty) opens the settings overlay. A second click closes it. The gear stays visible.
+- The overlay only closes when the user clicks the gear again or double-clicks the name pill again. There is no time-based auto-close.
+- The moment the user types a name (in the overlay or pre-Start), the gear disappears and the name pill becomes the dblclick trigger. The moment the user clears the name, the gear reappears.
+- Typing in the name field or changing a color updates the visible name pill within the same animation frame (no perceptible lag).
 - With the name field empty, no banner and no label is visible in either position mode.
 - Banner mode: the name pill sits inside the circle, centered horizontally, near the bottom. It is clipped cleanly by the circle's curve if it extends to the horizontal extents of the circle.
 - Below mode: the name label appears in the transparent area below the circle, centered, with no clipping.
-- Dragging the window by holding mouse-down on the circle and moving the cursor works exactly as today (the reveal trigger is double-click, so single-click + drag stays untouched). Clicking the gear itself does not start a drag.
+- Dragging the window by holding mouse-down on the circle and moving the cursor works exactly as in 0.1.0. The name pill and the gear are the only `no-drag` regions; everywhere else on the circle drags the window. Double-clicking the name pill or single-clicking the gear does not start a drag.
 
 ## Out of scope for 0.2.1
 

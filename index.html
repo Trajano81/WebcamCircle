@@ -48,8 +48,11 @@
 	<style>
 		/* https://www.electronjs.org/docs/api/frameless-window */
 		/* The body and #crop are draggable (so the user can move the window
-		   by grabbing the circle). Interactive controls below are no-drag. */
-		button, select, input, label, #settings-overlay {
+		   by grabbing the circle). Interactive controls below are no-drag.
+		   The name banner and label are also no-drag so dblclick can fire
+		   on them to open the settings overlay. */
+		button, select, input, label, #settings-overlay,
+		#name-banner, #name-label {
 			-webkit-app-region: no-drag;
 		}
 		p {
@@ -58,10 +61,10 @@
 		}
 		.controls {
 			text-align: center;
-			width: 300px;
+			width: 480px;
 			background: #f2f2f2;
-			margin: 15px auto;
-			padding: 10px;
+			margin: 20px auto;
+			padding: 12px;
 			box-sizing: border-box;
 		}
 		.color-row {
@@ -82,12 +85,12 @@
 		#select, #position-select {
 			display: block;
 			margin: 10px auto;
-			width: 250px;
+			width: 360px;
 		}
 		#name-input {
 			display: block;
 			margin: 10px auto;
-			width: 250px;
+			width: 360px;
 			padding: 4px 6px;
 			box-sizing: border-box;
 		}
@@ -96,9 +99,9 @@
 			position: relative;
 			border-radius: 50%;
 	    overflow: hidden;
-	    width: 300px;
-	    height: 300px;
-	    margin: 0 auto;
+	    width: 500px;
+	    height: 500px;
+	    margin: 10px auto 0;
 		}
 		#video {
 			position: relative;
@@ -116,14 +119,14 @@
 			border-radius: 12px;
 			font-size: 14px;
 			white-space: nowrap;
-			pointer-events: none;
+			cursor: pointer;
 			z-index: 2;
 		}
 		#name-label {
-			width: 300px;
+			width: 500px;
 			margin: 8px auto 0;
 			text-align: center;
-			pointer-events: none;
+			cursor: pointer;
 		}
 		#gear-button {
 			position: absolute;
@@ -150,15 +153,16 @@
 		}
 		#settings-overlay {
 			position: absolute;
-			bottom: 8px;
-			left: 8px;
-			right: 40px;
+			top: 50%;
+			left: 60px;
+			right: 60px;
+			transform: translateY(-50%);
 			background: rgba(255, 255, 255, 0.95);
-			padding: 8px;
-			border-radius: 8px;
+			padding: 16px;
+			border-radius: 10px;
 			display: none;
 			z-index: 4;
-			box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+			box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
 		}
 		#settings-overlay.show {
 			display: block;
@@ -215,8 +219,6 @@
 		const gearButton = document.getElementById('gear-button');
 		const settingsOverlay = document.getElementById('settings-overlay');
 
-		const AUTO_HIDE_MS = 5000;
-		let autoHideId = null;
 		let isRunning = false;
 
 		let currentStream;
@@ -257,6 +259,7 @@
 			if (!isRunning) {
 				nameBanner.classList.add('hide');
 				nameLabel.classList.add('hide');
+				gearButton.classList.add('hide');
 				return;
 			}
 
@@ -264,11 +267,15 @@
 			const name = (s.displayName || '').trim();
 
 			if (!name) {
+				// No name: show the gear as the settings entry point.
 				nameBanner.classList.add('hide');
 				nameLabel.classList.add('hide');
-				nameLabel.classList.remove('show-inline');
+				gearButton.classList.remove('hide');
 				return;
 			}
+
+			// Name is set: hide the gear and use the name pill as the dblclick target.
+			gearButton.classList.add('hide');
 
 			if (s.namePosition === 'banner') {
 				nameBanner.textContent = name;
@@ -276,7 +283,6 @@
 				nameBanner.style.backgroundColor = s.bgColor;
 				nameBanner.classList.remove('hide');
 				nameLabel.classList.add('hide');
-				nameLabel.classList.remove('show-inline');
 			} else {
 				const inner = document.createElement('span');
 				inner.textContent = name;
@@ -293,24 +299,8 @@
 			}
 		}
 
-		// Auto-hide timer (closes the settings overlay after inactivity)
-		function resetAutoHideTimer() {
-			clearAutoHideTimer();
-			autoHideId = setTimeout(() => {
-				hideOverlay();
-			}, AUTO_HIDE_MS);
-		}
-
-		function clearAutoHideTimer() {
-			if (autoHideId !== null) {
-				clearTimeout(autoHideId);
-				autoHideId = null;
-			}
-		}
-
-		function hideOverlay() {
-			settingsOverlay.classList.remove('show');
-			clearAutoHideTimer();
+		function toggleOverlay() {
+			settingsOverlay.classList.toggle('show');
 		}
 
 		// Bind a pair of controls (pre-Start and overlay) to the same state key
@@ -325,9 +315,6 @@
 					preControl.value = value;
 				}
 				render();
-				if (settingsOverlay.classList.contains('show')) {
-					resetAutoHideTimer();
-				}
 			};
 			preControl.addEventListener(eventName, () => handler(preControl));
 			overlayControl.addEventListener(eventName, () => handler(overlayControl));
@@ -364,21 +351,28 @@
 		bindPair(bgColor, bgColorOverlay, 'bgColor', 'input');
 		bindPair(positionSelect, positionSelectOverlay, 'namePosition', 'change');
 
-		// Click on the gear: toggle the settings overlay
+		// Click on the gear: toggle the settings overlay. Gear is the fallback
+		// trigger that only shows when no name has been set.
 		gearButton.addEventListener('click', event => {
 			event.stopPropagation();
-			const nowOpen = settingsOverlay.classList.toggle('show');
-			if (nowOpen) {
-				resetAutoHideTimer();
-			} else {
-				clearAutoHideTimer();
-			}
+			toggleOverlay();
 		});
 
-		// Clicks and other interaction inside the overlay reset the auto-hide timer
+		// Double-click on the name pill (banner or below label): toggle the
+		// settings overlay. Both elements are no-drag so dblclick fires reliably.
+		nameBanner.addEventListener('dblclick', event => {
+			event.stopPropagation();
+			toggleOverlay();
+		});
+		nameLabel.addEventListener('dblclick', event => {
+			event.stopPropagation();
+			toggleOverlay();
+		});
+
+		// Stop clicks inside the overlay from bubbling out so they do not
+		// accidentally trigger handlers higher up.
 		settingsOverlay.addEventListener('click', event => {
 			event.stopPropagation();
-			resetAutoHideTimer();
 		});
 
 		button.addEventListener('click', event => {
