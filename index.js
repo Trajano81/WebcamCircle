@@ -1,6 +1,6 @@
 'use strict';
 const path = require('path');
-const {app, BrowserWindow, Menu, shell} = require('electron');
+const {app, BrowserWindow, Menu, shell, ipcMain} = require('electron');
 
 const REPO_URL = 'https://github.com/Trajano81/WebcamCircle';
 const isMacOS = process.platform === 'darwin';
@@ -71,8 +71,8 @@ const createMainWindow = async () => {
 		maximizable: false,
 		minimizable: false,
 		acceptFirstMouse: true,
-		width: 520,
-		height: 520,
+		width: 320,
+		height: 420,
 		// https://stackoverflow.com/questions/44391448/electron-require-is-not-defined
 		webPreferences: {
 			nodeIntegration: true,
@@ -129,6 +129,19 @@ app.on('activate', async () => {
 	if (!mainWindow) {
 		mainWindow = await createMainWindow();
 	}
+});
+
+// Renderer asks for a new window size (used by the resize-the-circle gesture
+// and by the settings overlay auto-expand). We keep the window's center in the
+// same screen position so the resize feels like the circle growing around
+// itself, not like the window jumping to a new position.
+ipcMain.on('resize-window', (event, {width, height}) => {
+	if (!mainWindow) return;
+	const [oldX, oldY] = mainWindow.getPosition();
+	const [oldW, oldH] = mainWindow.getSize();
+	const newX = Math.round(oldX - (width - oldW) / 2);
+	const newY = Math.round(oldY - (height - oldH) / 2);
+	mainWindow.setBounds({x: newX, y: newY, width, height});
 });
 
 (async () => {

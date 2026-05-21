@@ -61,10 +61,10 @@
 		}
 		.controls {
 			text-align: center;
-			width: 480px;
+			width: 280px;
 			background: #f2f2f2;
-			margin: 20px auto;
-			padding: 12px;
+			margin: 15px auto;
+			padding: 10px;
 			box-sizing: border-box;
 		}
 		.color-row {
@@ -85,23 +85,33 @@
 		#select, #position-select {
 			display: block;
 			margin: 10px auto;
-			width: 360px;
+			width: 250px;
 		}
 		#name-input {
 			display: block;
 			margin: 10px auto;
-			width: 360px;
+			width: 250px;
 			padding: 4px 6px;
 			box-sizing: border-box;
 		}
 		/* https://stackoverflow.com/questions/15167545/how-to-crop-a-rectangular-image-into-a-square-with-css */
+		/* width and height are set dynamically from JS based on the saved
+		   circleSize (defaults to 300). */
 		#crop {
 			position: relative;
 			border-radius: 50%;
-	    overflow: hidden;
-	    width: 500px;
-	    height: 500px;
-	    margin: 10px auto 0;
+			overflow: hidden;
+			margin: 10px auto 0;
+			box-sizing: border-box;
+		}
+		#crop.resize-hover {
+			box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.75);
+			cursor: nwse-resize;
+		}
+		#crop.resizing {
+			box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.9);
+			cursor: nwse-resize;
+			user-select: none;
 		}
 		#video {
 			position: relative;
@@ -110,6 +120,8 @@
 	    left: 50%;
 	    transform: translate3d( -50%, 0, 0 );
 		}
+		/* font-size on the pills is set dynamically from JS based on
+		   nameFontSize (defaults to 14). */
 		#name-banner {
 			position: absolute;
 			bottom: 12%;
@@ -117,13 +129,15 @@
 			transform: translateX(-50%);
 			padding: 4px 12px;
 			border-radius: 12px;
-			font-size: 14px;
 			white-space: nowrap;
 			cursor: pointer;
 			z-index: 2;
 		}
+		#name-banner:hover, #name-label:hover {
+			outline: 2px solid rgba(255, 255, 255, 0.7);
+			outline-offset: 2px;
+		}
 		#name-label {
-			width: 500px;
 			margin: 8px auto 0;
 			text-align: center;
 			cursor: pointer;
@@ -190,13 +204,26 @@
 		// https://github.com/philnash/mediadevices-camera-selection/blob/master/app.js
 		// Persistence uses the renderer's built-in localStorage (Chromium persists
 		// it under the app's userData directory, so values survive restarts).
+		const {ipcRenderer} = require('electron');
+
 		const STORAGE_KEY = 'webcamcircle.0.2.1';
 		const DEFAULTS = {
 			displayName: '',
 			fontColor: '#ffffff',
 			bgColor: '#000000',
-			namePosition: 'banner'
+			namePosition: 'banner',
+			circleSize: 300,
+			nameFontSize: 14
 		};
+
+		// Sizing constants
+		const CIRCLE_MIN = 200;
+		const CIRCLE_MAX = 800;
+		const FONT_MIN = 8;
+		const FONT_MAX = 48;
+		const SETTINGS_MIN_SIZE = 480; // min circle size that fits the settings overlay
+		const WINDOW_MARGIN_X = 20;
+		const WINDOW_MARGIN_Y = 60; // extra room for the below-circle label
 
 		const video = document.getElementById('video');
 		const button = document.getElementById('button');
@@ -220,6 +247,8 @@
 		const settingsOverlay = document.getElementById('settings-overlay');
 
 		let isRunning = false;
+		let resizing = null; // { initialDiameter, initialDistFromCenter, centerScreen: {x, y} }
+		let overlayExpanded = false; // true when overlay is temporarily expanded above user's saved size
 
 		let currentStream;
 
@@ -252,6 +281,34 @@
 			fontColorOverlay.value = s.fontColor;
 			bgColorOverlay.value = s.bgColor;
 			positionSelectOverlay.value = s.namePosition;
+		}
+
+		function clamp(value, min, max) {
+			return Math.max(min, Math.min(max, value));
+		}
+
+		function resizeWindowTo(width, height) {
+			ipcRenderer.send('resize-window', {width, height});
+		}
+
+		// Apply a circle diameter: update CSS, resize the window around it.
+		// Returns the clamped size actually applied.
+		function applyCircleSize(diameter, opts = {}) {
+			const size = Math.round(clamp(diameter, CIRCLE_MIN, CIRCLE_MAX));
+			crop.style.width = size + 'px';
+			crop.style.height = size + 'px';
+			nameLabel.style.width = size + 'px';
+			if (opts.resizeWindow !== false) {
+				resizeWindowTo(size + WINDOW_MARGIN_X, size + WINDOW_MARGIN_Y);
+			}
+			return size;
+		}
+
+		function applyNameFontSize(px) {
+			const size = Math.round(clamp(px, FONT_MIN, FONT_MAX));
+			nameBanner.style.fontSize = size + 'px';
+			nameLabel.style.fontSize = size + 'px';
+			return size;
 		}
 
 		function render() {
@@ -290,8 +347,8 @@
 				inner.style.backgroundColor = s.bgColor;
 				inner.style.padding = '4px 12px';
 				inner.style.borderRadius = '12px';
-				inner.style.fontSize = '14px';
 				inner.style.whiteSpace = 'nowrap';
+				// font-size inherits from #name-label, which is set by applyNameFontSize
 				nameLabel.innerHTML = '';
 				nameLabel.appendChild(inner);
 				nameLabel.classList.remove('hide');
@@ -300,7 +357,20 @@
 		}
 
 		function toggleOverlay() {
-			settingsOverlay.classList.toggle('show');
+			const nowOpen = settingsOverlay.classList.toggle('show');
+			const userSize = readState().circleSize;
+			if (nowOpen && userSize < SETTINGS_MIN_SIZE) {
+				// Temporarily expand the window so the overlay has room.
+				overlayExpanded = true;
+				resizeWindowTo(SETTINGS_MIN_SIZE + WINDOW_MARGIN_X, SETTINGS_MIN_SIZE + WINDOW_MARGIN_Y);
+				crop.style.width = SETTINGS_MIN_SIZE + 'px';
+				crop.style.height = SETTINGS_MIN_SIZE + 'px';
+				nameLabel.style.width = SETTINGS_MIN_SIZE + 'px';
+			} else if (!nowOpen && overlayExpanded) {
+				// Restore the user's saved size.
+				overlayExpanded = false;
+				applyCircleSize(userSize);
+			}
 		}
 
 		// Bind a pair of controls (pre-Start and overlay) to the same state key
@@ -345,6 +415,11 @@
 
 		// Initial setup
 		loadStateIntoControls();
+		// Apply saved sizes to the (still hidden) circle and pills so the layout
+		// is correct the moment Start is clicked. resizeWindow=false because
+		// the pre-Start panel needs the bigger initial window, not the running size.
+		applyCircleSize(readState().circleSize, {resizeWindow: false});
+		applyNameFontSize(readState().nameFontSize);
 
 		bindPair(nameInput, nameInputOverlay, 'displayName', 'input');
 		bindPair(fontColor, fontColorOverlay, 'fontColor', 'input');
@@ -375,6 +450,98 @@
 			event.stopPropagation();
 		});
 
+		// Circle edge-hover detection. When the cursor is near the visible edge
+		// of the circle, highlight the ring and switch to a resize cursor.
+		// Inside the ring stays drag region (window-move) and outside the ring
+		// (in the corners of the bounding box) is also drag.
+		const RESIZE_RING_WIDTH = 16;
+
+		function getCropCenter() {
+			const rect = crop.getBoundingClientRect();
+			return {
+				x: rect.left + rect.width / 2,
+				y: rect.top + rect.height / 2,
+				radius: rect.width / 2
+			};
+		}
+
+		function isNearEdge(clientX, clientY) {
+			const c = getCropCenter();
+			const dx = clientX - c.x;
+			const dy = clientY - c.y;
+			const dist = Math.sqrt(dx * dx + dy * dy);
+			return dist > c.radius - RESIZE_RING_WIDTH && dist <= c.radius;
+		}
+
+		crop.addEventListener('mousemove', event => {
+			if (resizing) return;
+			crop.classList.toggle('resize-hover', isNearEdge(event.clientX, event.clientY));
+		});
+
+		crop.addEventListener('mouseleave', () => {
+			if (!resizing) {
+				crop.classList.remove('resize-hover');
+			}
+		});
+
+		// Start a drag-resize when the user mousedowns near the edge.
+		crop.addEventListener('mousedown', event => {
+			if (!isNearEdge(event.clientX, event.clientY)) return;
+			// Ignore mousedowns that originated on interactive children (gear, overlay, pill).
+			if (event.target !== crop && event.target !== document.getElementById('video')) {
+				return;
+			}
+			event.preventDefault();
+			event.stopPropagation();
+			const c = getCropCenter();
+			// Convert circle center to screen coords using the offset between
+			// screenXY and clientXY of this event. screenXY stays stable as the
+			// window resizes (we keep the window center fixed).
+			const centerScreenX = event.screenX - (event.clientX - c.x);
+			const centerScreenY = event.screenY - (event.clientY - c.y);
+			const dist = Math.sqrt(
+				(event.screenX - centerScreenX) ** 2 +
+				(event.screenY - centerScreenY) ** 2
+			);
+			resizing = {
+				initialDiameter: c.radius * 2,
+				initialDist: dist,
+				centerScreen: {x: centerScreenX, y: centerScreenY}
+			};
+			crop.classList.add('resizing');
+		});
+
+		document.addEventListener('mousemove', event => {
+			if (!resizing) return;
+			const dx = event.screenX - resizing.centerScreen.x;
+			const dy = event.screenY - resizing.centerScreen.y;
+			const dist = Math.sqrt(dx * dx + dy * dy);
+			const newDiameter = resizing.initialDiameter + 2 * (dist - resizing.initialDist);
+			applyCircleSize(newDiameter);
+		});
+
+		document.addEventListener('mouseup', () => {
+			if (!resizing) return;
+			const finalSize = parseInt(crop.style.width, 10);
+			writeState('circleSize', finalSize);
+			resizing = null;
+			crop.classList.remove('resizing');
+			crop.classList.remove('resize-hover');
+		});
+
+		// Scroll wheel on the name pills resizes the font.
+		function bindFontWheel(el) {
+			el.addEventListener('wheel', event => {
+				event.preventDefault();
+				const current = readState().nameFontSize;
+				const step = event.deltaY < 0 ? 1 : -1;
+				const next = applyNameFontSize(current + step);
+				writeState('nameFontSize', next);
+			}, {passive: false});
+		}
+		bindFontWheel(nameBanner);
+		bindFontWheel(nameLabel);
+
 		button.addEventListener('click', event => {
 			if (typeof currentStream !== 'undefined') {
 				stopMediaTracks(currentStream);
@@ -398,6 +565,9 @@
 					controls.classList.add('hide');
 					crop.classList.remove('hide');
 					isRunning = true;
+					// Shrink the window down to fit just the circle now that
+					// the pre-Start panel is gone. applyCircleSize handles the IPC.
+					applyCircleSize(readState().circleSize);
 					render();
 
 					return navigator.mediaDevices.enumerateDevices();
