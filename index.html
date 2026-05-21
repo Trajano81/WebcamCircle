@@ -47,10 +47,9 @@
 	</body>
 	<style>
 		/* https://www.electronjs.org/docs/api/frameless-window */
-		/* #crop is no-drag so dblclick can fire (macOS captures dblclick on
-		   drag regions for window-zoom). The body remains drag, so the
-		   transparent margin around the circle is still draggable. */
-		button, select, input, label, #settings-overlay, #crop {
+		/* The body and #crop are draggable (so the user can move the window
+		   by grabbing the circle). Interactive controls below are no-drag. */
+		button, select, input, label, #settings-overlay {
 			-webkit-app-region: no-drag;
 		}
 		p {
@@ -133,20 +132,21 @@
 			width: 26px;
 			height: 26px;
 			border: 0;
-			background: rgba(0, 0, 0, 0.6);
+			background: rgba(0, 0, 0, 0.55);
 			color: white;
 			border-radius: 50%;
 			cursor: pointer;
 			z-index: 3;
-			display: none;
+			display: flex;
 			align-items: center;
 			justify-content: center;
 			font-size: 14px;
 			line-height: 1;
 			padding: 0;
+			opacity: 0.6;
 		}
-		#gear-button.show {
-			display: flex;
+		#gear-button:hover {
+			opacity: 0.95;
 		}
 		#settings-overlay {
 			position: absolute;
@@ -293,11 +293,11 @@
 			}
 		}
 
-		// Auto-hide timer
+		// Auto-hide timer (closes the settings overlay after inactivity)
 		function resetAutoHideTimer() {
 			clearAutoHideTimer();
 			autoHideId = setTimeout(() => {
-				hideGearAndOverlay();
+				hideOverlay();
 			}, AUTO_HIDE_MS);
 		}
 
@@ -308,15 +308,9 @@
 			}
 		}
 
-		function hideGearAndOverlay() {
-			gearButton.classList.remove('show');
+		function hideOverlay() {
 			settingsOverlay.classList.remove('show');
 			clearAutoHideTimer();
-		}
-
-		function showGear() {
-			gearButton.classList.add('show');
-			resetAutoHideTimer();
 		}
 
 		// Bind a pair of controls (pre-Start and overlay) to the same state key
@@ -331,7 +325,7 @@
 					preControl.value = value;
 				}
 				render();
-				if (gearButton.classList.contains('show')) {
+				if (settingsOverlay.classList.contains('show')) {
 					resetAutoHideTimer();
 				}
 			};
@@ -370,30 +364,18 @@
 		bindPair(bgColor, bgColorOverlay, 'bgColor', 'input');
 		bindPair(positionSelect, positionSelectOverlay, 'namePosition', 'change');
 
-		// Double-click on the circle: toggle the gear (and overlay if visible)
-		crop.addEventListener('dblclick', event => {
-			if (event.target === gearButton || gearButton.contains(event.target)) {
-				return;
-			}
-			if (event.target.closest('#settings-overlay')) {
-				return;
-			}
-			if (gearButton.classList.contains('show')) {
-				hideGearAndOverlay();
-			} else {
-				showGear();
-			}
-		});
-
 		// Click on the gear: toggle the settings overlay
 		gearButton.addEventListener('click', event => {
 			event.stopPropagation();
-			settingsOverlay.classList.toggle('show');
-			resetAutoHideTimer();
+			const nowOpen = settingsOverlay.classList.toggle('show');
+			if (nowOpen) {
+				resetAutoHideTimer();
+			} else {
+				clearAutoHideTimer();
+			}
 		});
 
-		// Clicks inside the overlay reset the auto-hide timer but should not bubble
-		// up to the crop dblclick handler (defensive, since dblclick is a separate event)
+		// Clicks and other interaction inside the overlay reset the auto-hide timer
 		settingsOverlay.addEventListener('click', event => {
 			event.stopPropagation();
 			resetAutoHideTimer();
