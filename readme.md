@@ -47,9 +47,9 @@ Use the link below to download the latest copy of WebcamCircle.
 
 ### macOS
 
-[<img src="images/download.png" height="40" alt="Apple Silicon download">](https://github.com/Trajano81/WebcamCircle/releases/download/0.1.0/WebcamCircle-0.1.0-arm64.dmg) Apple Silicon (M1, M2, M3, M4)
+[<img src="images/download.png" height="40" alt="Apple Silicon download">](https://github.com/Trajano81/WebcamCircle/releases/download/0.2.1/WebcamCircle-0.2.1-arm64.dmg) Apple Silicon (M1, M2, M3, M4)
 
-[<img src="images/download.png" height="40" alt="Intel download">](https://github.com/Trajano81/WebcamCircle/releases/download/0.1.0/WebcamCircle-0.1.0-x64.dmg) Intel
+[<img src="images/download.png" height="40" alt="Intel download">](https://github.com/Trajano81/WebcamCircle/releases/download/0.2.1/WebcamCircle-0.2.1-x64.dmg) Intel
 
 *Not sure which one? Apple menu, About This Mac. Anything starting with M (M1, M2, etc.) is Apple Silicon. Anything labeled "Intel Core" is Intel.*
 

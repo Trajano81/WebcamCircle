@@ -1,34 +1,67 @@
 'use strict';
 const path = require('path');
-const {app, BrowserWindow, Menu} = require('electron');
-/// const {autoUpdater} = require('electron-updater');
-const {is} = require('electron-util');
-const unhandled = require('electron-unhandled');
-const debug = require('electron-debug');
-const contextMenu = require('electron-context-menu');
-const config = require('./config');
-const menu = require('./menu');
+const {app, BrowserWindow, Menu, shell} = require('electron');
 
-unhandled();
-debug();
-contextMenu();
+const REPO_URL = 'https://github.com/Trajano81/WebcamCircle';
+const isMacOS = process.platform === 'darwin';
 
-// Note: Must match `build.appId` in package.json
+// Note: must match `build.appId` in package.json
 app.setAppUserModelId('com.cainhill.WebcamCircle');
-
-// Uncomment this before publishing your first version.
-// It's commented out as it throws an error if there are no published versions.
-// if (!is.development) {
-// 	const FOUR_HOURS = 1000 * 60 * 60 * 4;
-// 	setInterval(() => {
-// 		autoUpdater.checkForUpdates();
-// 	}, FOUR_HOURS);
-//
-// 	autoUpdater.checkForUpdates();
-// }
 
 // Prevent window from being garbage collected
 let mainWindow;
+
+const buildMenu = () => {
+	const helpSubmenu = [
+		{
+			label: 'Website',
+			click() {
+				shell.openExternal(REPO_URL);
+			}
+		},
+		{
+			label: 'Report an Issue',
+			click() {
+				shell.openExternal(`${REPO_URL}/issues/new`);
+			}
+		}
+	];
+
+	const macosTemplate = [
+		{
+			label: 'WebcamCircle',
+			submenu: [
+				{role: 'about'},
+				{type: 'separator'},
+				{role: 'services'},
+				{type: 'separator'},
+				{role: 'hide'},
+				{role: 'hideOthers'},
+				{role: 'unhide'},
+				{type: 'separator'},
+				{role: 'quit'}
+			]
+		},
+		{role: 'editMenu'},
+		{role: 'viewMenu'},
+		{role: 'windowMenu'},
+		{role: 'help', submenu: helpSubmenu}
+	];
+
+	const otherTemplate = [
+		{
+			role: 'fileMenu',
+			submenu: [
+				{role: 'quit'}
+			]
+		},
+		{role: 'editMenu'},
+		{role: 'viewMenu'},
+		{role: 'help', submenu: helpSubmenu}
+	];
+
+	return Menu.buildFromTemplate(isMacOS ? macosTemplate : otherTemplate);
+};
 
 const createMainWindow = async () => {
 	const win = new BrowserWindow({
@@ -42,18 +75,17 @@ const createMainWindow = async () => {
 		height: 400,
 		// https://stackoverflow.com/questions/44391448/electron-require-is-not-defined
 		webPreferences: {
-				nodeIntegration: true,
-			  devTools: false
+			nodeIntegration: true,
+			contextIsolation: false,
+			devTools: false
 		},
 		// https://github.com/MaybeRex/Electron-Webcam/blob/master/src/main.js
 		frame: false,
 		resizable: false,
 		// https://github.com/electron/electron/issues/20933
-		// https://discuss.atom.io/t/set-browserwindow-always-on-top-even-other-app-is-in-fullscreen/34215/4
-		// https://github.com/electron/electron/issues/10078
 		alwaysOnTop: true,
 		// https://ourcodeworld.com/articles/read/315/how-to-create-a-transparent-window-with-electron-framework
-		transparent:true
+		transparent: true
 	});
 
 	win.on('ready-to-show', () => {
@@ -61,8 +93,6 @@ const createMainWindow = async () => {
 	});
 
 	win.on('closed', () => {
-		// Dereference the window
-		// For multiple windows store them in an array
 		mainWindow = undefined;
 	});
 
@@ -71,7 +101,6 @@ const createMainWindow = async () => {
 	return win;
 };
 
-// Prevent multiple instances of the app
 if (!app.requestSingleInstanceLock()) {
 	app.quit();
 }
@@ -87,7 +116,7 @@ app.on('second-instance', () => {
 });
 
 app.on('window-all-closed', () => {
-	if (!is.macos) {
+	if (!isMacOS) {
 		app.quit();
 	}
 });
@@ -100,6 +129,6 @@ app.on('activate', async () => {
 
 (async () => {
 	await app.whenReady();
-	Menu.setApplicationMenu(menu);
+	Menu.setApplicationMenu(buildMenu());
 	mainWindow = await createMainWindow();
 })();

@@ -9,15 +9,45 @@
 			<div class="controls">
 				<p>Select your webcam:</p>
 				<select id="select"></select>
+
+				<p>Your name (optional):</p>
+				<input type="text" id="name-input" placeholder="Your name">
+
+				<p>Name colors:</p>
+				<div class="color-row">
+					<label>Font <input type="color" id="font-color"></label>
+					<label>Background <input type="color" id="bg-color"></label>
+				</div>
+
+				<p>Position:</p>
+				<select id="position-select">
+					<option value="banner">Banner inside circle</option>
+					<option value="below">Label below circle</option>
+				</select>
+
 				<button id="button">Start</button>
 			</div>
 			<div id="crop" class="hide">
 				<video id="video" autoplay="" playsinline=""></video>
+				<div id="name-banner" class="hide"></div>
+				<button id="gear-button" type="button" aria-label="Settings">&#9881;</button>
+				<div id="settings-overlay">
+					<input type="text" id="name-input-overlay" placeholder="Your name">
+					<div class="color-row">
+						<label>Font <input type="color" id="font-color-overlay"></label>
+						<label>Background <input type="color" id="bg-color-overlay"></label>
+					</div>
+					<select id="position-select-overlay">
+						<option value="banner">Banner inside circle</option>
+						<option value="below">Label below circle</option>
+					</select>
+				</div>
 			</div>
+			<div id="name-label" class="hide"></div>
 	</body>
 	<style>
 		/* https://www.electronjs.org/docs/api/frameless-window */
-		button, select {
+		button, select, input, label, #settings-overlay {
 			-webkit-app-region: no-drag;
 		}
 		p {
@@ -27,20 +57,41 @@
 		.controls {
 			text-align: center;
 			width: 300px;
-			height: 300px;
 			background: #f2f2f2;
 			margin: 15px auto;
+			padding: 10px;
+			box-sizing: border-box;
+		}
+		.color-row {
+			display: flex;
+			justify-content: center;
+			gap: 12px;
+			margin: 6px 0;
+		}
+		.color-row label {
+			font-size: 12px;
+			display: inline-flex;
+			align-items: center;
+			gap: 4px;
 		}
 		.hide {
-			display: none;
+			display: none !important;
 		}
-		#select {
+		#select, #position-select {
 			display: block;
 			margin: 10px auto;
 			width: 250px;
 		}
+		#name-input {
+			display: block;
+			margin: 10px auto;
+			width: 250px;
+			padding: 4px 6px;
+			box-sizing: border-box;
+		}
 		/* https://stackoverflow.com/questions/15167545/how-to-crop-a-rectangular-image-into-a-square-with-css */
 		#crop {
+			position: relative;
 			border-radius: 50%;
 	    overflow: hidden;
 	    width: 300px;
@@ -54,98 +105,333 @@
 	    left: 50%;
 	    transform: translate3d( -50%, 0, 0 );
 		}
+		#name-banner {
+			position: absolute;
+			bottom: 12%;
+			left: 50%;
+			transform: translateX(-50%);
+			padding: 4px 12px;
+			border-radius: 12px;
+			font-size: 14px;
+			white-space: nowrap;
+			pointer-events: none;
+			z-index: 2;
+		}
+		#name-label {
+			width: 300px;
+			margin: 8px auto 0;
+			text-align: center;
+			pointer-events: none;
+		}
+		#gear-button {
+			position: absolute;
+			bottom: 8px;
+			right: 8px;
+			width: 26px;
+			height: 26px;
+			border: 0;
+			background: rgba(0, 0, 0, 0.6);
+			color: white;
+			border-radius: 50%;
+			cursor: pointer;
+			z-index: 3;
+			display: none;
+			align-items: center;
+			justify-content: center;
+			font-size: 14px;
+			line-height: 1;
+			padding: 0;
+		}
+		#gear-button.show {
+			display: flex;
+		}
+		#settings-overlay {
+			position: absolute;
+			bottom: 8px;
+			left: 8px;
+			right: 40px;
+			background: rgba(255, 255, 255, 0.95);
+			padding: 8px;
+			border-radius: 8px;
+			display: none;
+			z-index: 4;
+			box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+		}
+		#settings-overlay.show {
+			display: block;
+		}
+		#settings-overlay input[type="text"] {
+			width: 100%;
+			padding: 4px 6px;
+			margin-bottom: 6px;
+			box-sizing: border-box;
+			font-size: 12px;
+		}
+		#settings-overlay select {
+			width: 100%;
+			margin-top: 6px;
+			font-size: 12px;
+		}
+		#settings-overlay .color-row {
+			margin: 0;
+		}
+		#settings-overlay label {
+			font-size: 11px;
+		}
 	</style>
 	<script>
 		// https://github.com/philnash/mediadevices-camera-selection/blob/master/app.js
+		// Persistence uses the renderer's built-in localStorage (Chromium persists
+		// it under the app's userData directory, so values survive restarts).
+		const STORAGE_KEY = 'webcamcircle.0.2.1';
+		const DEFAULTS = {
+			displayName: '',
+			fontColor: '#ffffff',
+			bgColor: '#000000',
+			namePosition: 'banner'
+		};
+
 		const video = document.getElementById('video');
 		const button = document.getElementById('button');
 		const select = document.getElementById('select');
-
-		// CH: These next two lines added
 		const controls = document.querySelector('.controls');
 		const crop = document.getElementById('crop');
 
+		const nameInput = document.getElementById('name-input');
+		const fontColor = document.getElementById('font-color');
+		const bgColor = document.getElementById('bg-color');
+		const positionSelect = document.getElementById('position-select');
+
+		const nameInputOverlay = document.getElementById('name-input-overlay');
+		const fontColorOverlay = document.getElementById('font-color-overlay');
+		const bgColorOverlay = document.getElementById('bg-color-overlay');
+		const positionSelectOverlay = document.getElementById('position-select-overlay');
+
+		const nameBanner = document.getElementById('name-banner');
+		const nameLabel = document.getElementById('name-label');
+		const gearButton = document.getElementById('gear-button');
+		const settingsOverlay = document.getElementById('settings-overlay');
+
+		const AUTO_HIDE_MS = 5000;
+		let autoHideId = null;
+		let isRunning = false;
+
 		let currentStream;
 
+		// State helpers backed by localStorage
+		function readState() {
+			let stored = {};
+			try {
+				const raw = localStorage.getItem(STORAGE_KEY);
+				if (raw) {
+					stored = JSON.parse(raw);
+				}
+			} catch (error) {
+				console.error('Failed to read settings from localStorage', error);
+			}
+			return { ...DEFAULTS, ...stored };
+		}
+
+		function writeState(key, value) {
+			const next = { ...readState(), [key]: value };
+			localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+		}
+
+		function loadStateIntoControls() {
+			const s = readState();
+			nameInput.value = s.displayName;
+			fontColor.value = s.fontColor;
+			bgColor.value = s.bgColor;
+			positionSelect.value = s.namePosition;
+			nameInputOverlay.value = s.displayName;
+			fontColorOverlay.value = s.fontColor;
+			bgColorOverlay.value = s.bgColor;
+			positionSelectOverlay.value = s.namePosition;
+		}
+
+		function render() {
+			// Nothing to render before Start; the overlays live inside the running circle.
+			if (!isRunning) {
+				nameBanner.classList.add('hide');
+				nameLabel.classList.add('hide');
+				return;
+			}
+
+			const s = readState();
+			const name = (s.displayName || '').trim();
+
+			if (!name) {
+				nameBanner.classList.add('hide');
+				nameLabel.classList.add('hide');
+				nameLabel.classList.remove('show-inline');
+				return;
+			}
+
+			if (s.namePosition === 'banner') {
+				nameBanner.textContent = name;
+				nameBanner.style.color = s.fontColor;
+				nameBanner.style.backgroundColor = s.bgColor;
+				nameBanner.classList.remove('hide');
+				nameLabel.classList.add('hide');
+				nameLabel.classList.remove('show-inline');
+			} else {
+				const inner = document.createElement('span');
+				inner.textContent = name;
+				inner.style.color = s.fontColor;
+				inner.style.backgroundColor = s.bgColor;
+				inner.style.padding = '4px 12px';
+				inner.style.borderRadius = '12px';
+				inner.style.fontSize = '14px';
+				inner.style.whiteSpace = 'nowrap';
+				nameLabel.innerHTML = '';
+				nameLabel.appendChild(inner);
+				nameLabel.classList.remove('hide');
+				nameBanner.classList.add('hide');
+			}
+		}
+
+		// Auto-hide timer
+		function resetAutoHideTimer() {
+			clearAutoHideTimer();
+			autoHideId = setTimeout(() => {
+				hideGearAndOverlay();
+			}, AUTO_HIDE_MS);
+		}
+
+		function clearAutoHideTimer() {
+			if (autoHideId !== null) {
+				clearTimeout(autoHideId);
+				autoHideId = null;
+			}
+		}
+
+		function hideGearAndOverlay() {
+			gearButton.classList.remove('show');
+			settingsOverlay.classList.remove('show');
+			clearAutoHideTimer();
+		}
+
+		function showGear() {
+			gearButton.classList.add('show');
+			resetAutoHideTimer();
+		}
+
+		// Bind a pair of controls (pre-Start and overlay) to the same state key
+		function bindPair(preControl, overlayControl, key, eventName) {
+			const handler = source => {
+				const value = source.value;
+				writeState(key, value);
+				// Keep the other half of the pair in sync
+				if (source === preControl) {
+					overlayControl.value = value;
+				} else {
+					preControl.value = value;
+				}
+				render();
+				if (gearButton.classList.contains('show')) {
+					resetAutoHideTimer();
+				}
+			};
+			preControl.addEventListener(eventName, () => handler(preControl));
+			overlayControl.addEventListener(eventName, () => handler(overlayControl));
+		}
+
+		// Camera enumeration (unchanged from original except for ordering)
 		function stopMediaTracks(stream) {
-		  stream.getTracks().forEach(track => {
-		    track.stop();
-		  });
+			stream.getTracks().forEach(track => {
+				track.stop();
+			});
 		}
 
 		function gotDevices(mediaDevices) {
-		  select.innerHTML = '';
-		  select.appendChild(document.createElement('option'));
-		  let count = 1;
-		  mediaDevices.forEach(mediaDevice => {
-		    if (mediaDevice.kind === 'videoinput') {
-		      const option = document.createElement('option');
-		      option.value = mediaDevice.deviceId;
-		      const label = mediaDevice.label || `Camera ${count++}`;
-		      const textNode = document.createTextNode(label);
-		      option.appendChild(textNode);
-		      select.appendChild(option);
-		    }
-		  });
+			select.innerHTML = '';
+			select.appendChild(document.createElement('option'));
+			let count = 1;
+			mediaDevices.forEach(mediaDevice => {
+				if (mediaDevice.kind === 'videoinput') {
+					const option = document.createElement('option');
+					option.value = mediaDevice.deviceId;
+					const label = mediaDevice.label || `Camera ${count++}`;
+					const textNode = document.createTextNode(label);
+					option.appendChild(textNode);
+					select.appendChild(option);
+				}
+			});
 		}
 
-		button.addEventListener('click', event => {
-		  if (typeof currentStream !== 'undefined') {
-		    stopMediaTracks(currentStream);
-		  }
-		  const videoConstraints = {};
-		  if (select.value === '') {
-		    videoConstraints.facingMode = 'environment';
-		  } else {
-		    videoConstraints.deviceId = { exact: select.value };
-		  }
-		  const constraints = {
-		    video: videoConstraints,
-		    audio: false
-		  };
-		  navigator.mediaDevices
-		    .getUserMedia(constraints)
-		    .then(stream => {
-		      currentStream = stream;
-		      video.srcObject = stream;
+		// Initial setup
+		loadStateIntoControls();
 
-					// CH: These next two lines added
+		bindPair(nameInput, nameInputOverlay, 'displayName', 'input');
+		bindPair(fontColor, fontColorOverlay, 'fontColor', 'input');
+		bindPair(bgColor, bgColorOverlay, 'bgColor', 'input');
+		bindPair(positionSelect, positionSelectOverlay, 'namePosition', 'change');
+
+		// Double-click on the circle: toggle the gear (and overlay if visible)
+		crop.addEventListener('dblclick', event => {
+			if (event.target === gearButton || gearButton.contains(event.target)) {
+				return;
+			}
+			if (event.target.closest('#settings-overlay')) {
+				return;
+			}
+			if (gearButton.classList.contains('show')) {
+				hideGearAndOverlay();
+			} else {
+				showGear();
+			}
+		});
+
+		// Click on the gear: toggle the settings overlay
+		gearButton.addEventListener('click', event => {
+			event.stopPropagation();
+			settingsOverlay.classList.toggle('show');
+			resetAutoHideTimer();
+		});
+
+		// Clicks inside the overlay reset the auto-hide timer but should not bubble
+		// up to the crop dblclick handler (defensive, since dblclick is a separate event)
+		settingsOverlay.addEventListener('click', event => {
+			event.stopPropagation();
+			resetAutoHideTimer();
+		});
+
+		button.addEventListener('click', event => {
+			if (typeof currentStream !== 'undefined') {
+				stopMediaTracks(currentStream);
+			}
+			const videoConstraints = {};
+			if (select.value === '') {
+				videoConstraints.facingMode = 'environment';
+			} else {
+				videoConstraints.deviceId = { exact: select.value };
+			}
+			const constraints = {
+				video: videoConstraints,
+				audio: false
+			};
+			navigator.mediaDevices
+				.getUserMedia(constraints)
+				.then(stream => {
+					currentStream = stream;
+					video.srcObject = stream;
+
 					controls.classList.add('hide');
 					crop.classList.remove('hide');
+					isRunning = true;
+					render();
 
-		      return navigator.mediaDevices.enumerateDevices();
-		    })
-		    .then(gotDevices)
-		    .catch(error => {
-		      console.error(error);
-		    });
+					return navigator.mediaDevices.enumerateDevices();
+				})
+				.then(gotDevices)
+				.catch(error => {
+					console.error(error);
+				});
 		});
 
 		navigator.mediaDevices.enumerateDevices().then(gotDevices);
+		render();
 	</script>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

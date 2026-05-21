@@ -1,8 +1,9 @@
 {
 	"name": "webcam-circle",
 	"productName": "WebcamCircle",
-	"version": "0.1.0",
+	"version": "0.2.1",
 	"description": "Show your webcam view in a circle above all other windows",
+	"main": "index.js",
 	"license": "MIT",
 	"repository": "cainhill/WebcamCircle",
 	"author": {
@@ -21,19 +22,9 @@
 		"release:mac": "./scripts/release-mac.sh",
 		"release": "np"
 	},
-	"dependencies": {
-		"electron-context-menu": "^0.15.0",
-		"electron-debug": "^3.0.0",
-		"electron-store": "^5.1.0",
-		"electron-unhandled": "^3.0.0",
-		"electron-updater": "^4.0.6",
-		"electron-util": "^0.13.0",
-		"git": "^0.1.5",
-		"webcamjs": "^1.0.26"
-	},
 	"comment_1": "https://github.com/electron-userland/electron-builder/issues/4157#issuecomment-596419610",
 	"devDependencies": {
-		"electron": "^30.0.0",
+		"electron": "^30.5.1",
 		"electron-builder": "^24.13.3",
 		"np": "^5.0.3",
 		"xo": "^0.25.3"
@@ -58,7 +49,10 @@
 			"target": [
 				{
 					"target": "dmg",
-					"arch": ["arm64", "x64"]
+					"arch": [
+						"arm64",
+						"x64"
+					]
 				}
 			],
 			"artifactName": "${productName}-${version}-${arch}.${ext}",
